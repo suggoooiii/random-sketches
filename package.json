@@ -1,0 +1,36 @@
+{
+  "name": "random-sketches",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noemit && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@daeinc/draw": "^0.4.0",
+    "@daeinc/geom": "^0.11.0",
+    "@daeinc/keyframes": "^0.1.0",
+    "@daeinc/math": "^0.6.0",
+    "@daeinc/timeline": "^0.5.2",
+    "@thi.ng/arrays": "^2.7.19",
+    "@thi.ng/color": "^5.6.16",
+    "@thi.ng/color-palettes": "^1.2.29",
+    "@thi.ng/random": "^3.6.29",
+    "eases": "^1.0.8",
+    "ssam": "^0.18.2",
+    "three": "^0.161.0"
+  },
+  "devDependencies": {
+    "@types/eases": "^1.0.4",
+    "prettier": "^3.2.4",
+    "vite": "^5.0.12",
+    "vite-plugin-glsl": "^1.2.1",
+    "vite-plugin-ssam-export": "^0.1.1",
+    "vite-plugin-ssam-ffmpeg": "^0.2.3",
+    "vite-plugin-ssam-git": "^0.1.2",
+    "vite-plugin-ssam-timelapse": "^0.1.2"
+  }
+}
