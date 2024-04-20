@@ -21,7 +21,8 @@
     "@thi.ng/random": "^3.6.29",
     "eases": "^1.0.8",
     "ssam": "^0.18.2",
-    "three": "^0.161.0"
+    "three": "^0.161.0",
+    "three-custom-shader-material": "^5.4.0"
   },
   "devDependencies": {
     "@types/eases": "^1.0.4",

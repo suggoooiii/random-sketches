@@ -1,6 +1,7 @@
-  uniform float time;
-  uniform vec2 mousePosition;
-  varying vec2 vUv;
+precision highp float;
+uniform float time;
+uniform vec2 mousePosition;
+varying vec2 vUv;
 
   // Simplex noise function
   vec3 permute(vec3 x) { return mod(((x*34.0)+1.0)*x, 289.0); }

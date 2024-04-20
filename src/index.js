@@ -12,8 +12,8 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
 
   function onMove() {
     document.addEventListener("mousemove", (event) => {
-      const mouseX = (event.clientX / window.innerWidth) * 2 - 1;
-      const mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+      const mouseX = (event.clientX / width) * 2 - 1;
+      const mouseY = -(event.clientY / height) * 2 + 1;
       flowFieldMaterial.uniforms.mousePosition.value.set(mouseX, mouseY);
     });
   }
@@ -87,7 +87,7 @@ const settings = {
   pixelRatio: window.devicePixelRatio,
   animate: true,
   duration: 20_000,
-  playFps: 120,
+  playFps: 60,
   exportFps: 60,
   framesFormat: ["webm"],
   attributes: {
