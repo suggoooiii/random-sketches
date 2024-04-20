@@ -1,201 +1,74 @@
 import { ssam } from "ssam";
-import {
-  Mesh,
-  PlaneGeometry,
-  Scene,
-  WebGLRenderer,
-  MeshBasicMaterial,
-  DoubleSide,
-  Vector2,
-  Vector3,
-  PerspectiveCamera,
-  ShaderMaterial,
-  OrthographicCamera,
-  BoxGeometry,
-  Camera,
-  DataTexture,
-  WebGLRenderTarget,
-  NearestFilter,
-  RGBAFormat,
-  FloatType,
-  SphereGeometry,
-  AmbientLight,
-  DirectionalLight,
-  PointLight,
-} from "three";
+import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import baseVert from "./shaders/base.vert";
 import baseFrag from "./shaders/base.frag";
+import flowFieldVertexShader from "./shaders/flowfield.vert";
+import flowFieldFragmentShader from "./shaders/flowfield.frag";
 
 const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
+  const scene = new THREE.Scene();
+  const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1 / Math.pow(2, 53), 1);
+
+  function onMove() {
+    document.addEventListener("mousemove", (event) => {
+      const mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+      const mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+      flowFieldMaterial.uniforms.mousePosition.value.set(mouseX, mouseY);
+    });
+  }
+
+  function getRandomData(width, height, size) {
+    var len = width * height * 3;
+    var data = new Float32Array(len);
+    while (len--) data[len] = (Math.random() * 2 - 1) * size;
+    return data;
+  }
+  const options = {
+    minFilter: THREE.NearestFilter, //important as we want to sample square pixels
+    magFilter: THREE.NearestFilter, //
+    format: THREE.RGBFormat, //could be RGBAFormat
+    type: THREE.FloatType, //important as we need precise coordinates (not ints)
+  };
   // rendere
-  const renderer = new WebGLRenderer({
+  const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
+    alpha: true,
   });
   renderer.setSize(width, height);
   renderer.setPixelRatio(pixelRatio);
   renderer.setClearColor(0xffffff, 1);
-
-  const gridMax = 100; // Define the size of the grid
-  const cellSize = 1; // Define the size of each cell
-
-  // scene
-  const scene = new Scene();
-  // camera
-  const camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.z = 2;
-
-  // controls
   const controls = new OrbitControls(camera, renderer.domElement);
-  // controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
-  // controls.dampingFactor = 0.25;
-  // controls.screenSpacePanning = false;
+  controls.enableDamping = true; // an animation loop is required when either damping or auto-rotation are enabled
+  controls.dampingFactor = 0.25;
   controls.autoRotate = true;
   controls.autoRotateSpeed = 2.0;
+  const rtt = new THREE.WebGLRenderTarget(width, height, options);
 
-  // const geometry = new BoxGeometry(cellSize, cellSize, cellSize);
-  // const uniforms = {
-  //   resolution: { value: new Vector2(width, height) },
-  //   time: { value: 0.0 },
-  // };
-
-  // Create a sphere geometry
-  const sphereGeometry = new SphereGeometry(1, 64, 64);
-
-  // Shader material setup
-  const shaderMaterial = new ShaderMaterial({
-    vertexShader: `
-        varying vec2 vUv;
-        void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-    `,
-    fragmentShader: `
-        uniform sampler2D currentState;
-        varying vec2 vUv;
-        void main() {
-            float state = texture2D(currentState, vUv).r;
-            gl_FragColor = vec4(vec3(state), 1.0);
-        }
-    `,
+  //create a bi-unit quadrilateral and uses the simulation material to update the Float Texture
+  const geom = new THREE.BufferGeometry();
+  geom.setAttribute(
+    "position",
+    new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, 1, 0]), 3),
+  );
+  geom.setAttribute("uv", new THREE.BufferAttribute(new Float32Array([0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0]), 2));
+  const flowFieldMaterial = new THREE.ShaderMaterial({
+    vertexShader: flowFieldVertexShader,
+    fragmentShader: flowFieldFragmentShader,
     uniforms: {
-      currentState: { value: null },
+      time: { value: 0 },
+      mousePosition: { value: new THREE.Vector2(0, 0) },
     },
   });
 
-  const w = 64;
-  const h = 64;
-
-  let textureCurrentGeneration, texturePreviousGeneration;
-  let currentGenerationMaterial, previousGenerationMaterial;
-  const gameOfLifeMaterial = new ShaderMaterial({
-    uniforms: {
-      textureCurrentGeneration: { value: null },
-      texturePreviousGeneration: { value: null },
-    },
-    vertexShader: `
-      varying vec2 vUv;
-      void main() {
-        vUv = uv;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `,
-    fragmentShader: `
-    uniform sampler2D textureCurrentGeneration;
-    uniform sampler2D texturePreviousGeneration;
-    varying vec2 vUv;
-
-    void main() {
-      vec4 currentGeneration = texture2D(textureCurrentGeneration, vUv);
-      vec4 previousGeneration = texture2D(texturePreviousGeneration, vUv);
-
-      int sum = 0;
-      for (int i = -1; i <= 1; i++) {
-        for (int j = -1; j <= 1; j++) {
-          vec2 offset = vec2(float(i), float(j)) / 64.0;
-          sum += int(texture2D(texturePreviousGeneration, vUv + offset).r);
-        }
-      }
-
-      int currentState = int(previousGeneration.r);
-      int newState = currentState;
-
-      if (currentState == 1 && (sum < 2 || sum > 3)) {
-        newState = 0;
-      } else if (currentState == 0 && sum == 3) {
-        newState = 1;
-      }
-
-      gl_FragColor = vec4(float(newState), 0.0, 0.0, 1.0);
-    }
-    `,
-    // side: DoubleSide,
-    // wireframe: true,
-    precision: "highp",
-  });
-
-  const boxgeometry = new BoxGeometry(2, 2, 2);
-  // Create a mesh with the sphere geometry and shader material
-  const boxy = new Mesh(boxgeometry, gameOfLifeMaterial);
-  const sphere = new Mesh(sphereGeometry, gameOfLifeMaterial);
-  scene.add(sphere);
-
-  initializeTextures();
-
-  function initializeTextures() {
-    // Texture setup for storing the state
-    const textureData = new Uint8Array(w * h * 4);
-    for (let i = 0; i < w * h; i++) {
-      textureData[i * 4] = Math.random() > 0.5 ? 255 : 0;
-    }
-    textureCurrentGeneration = new DataTexture(textureData, w, h, RGBAFormat);
-    textureCurrentGeneration.needsUpdate = true;
-
-    texturePreviousGeneration = new DataTexture(textureData, w, h, RGBAFormat);
-    texturePreviousGeneration.needsUpdate = true;
-
-    gameOfLifeMaterial.uniforms.textureCurrentGeneration.value = textureCurrentGeneration;
-    gameOfLifeMaterial.uniforms.texturePreviousGeneration.value = texturePreviousGeneration;
-  }
-
-  const webglW = 1024;
-  const webglH = 2048;
-  const targetA = new WebGLRenderTarget(256, 256, {
-    minFilter: NearestFilter,
-    magFilter: NearestFilter,
-    format: RGBAFormat,
-    type: FloatType,
-    depthBuffer: false,
-  });
-
-  const targetB = new WebGLRenderTarget(256, 256, {
-    minFilter: NearestFilter,
-    magFilter: NearestFilter,
-    format: RGBAFormat,
-    type: FloatType,
-    depthBuffer: false,
-  });
+  scene.add(new THREE.Mesh(geom, flowFieldMaterial));
 
   // works like the animate function in threejs
   wrap.render = ({ playhead }) => {
-    let writeBuffer = targetA;
-    const temp = textureCurrentGeneration;
-    textureCurrentGeneration = texturePreviousGeneration;
-    texturePreviousGeneration = temp;
-
-    gameOfLifeMaterial.uniforms.textureCurrentGeneration.value = textureCurrentGeneration;
-    // Render to write buffer
-    renderer.setRenderTarget(writeBuffer);
+    onMove();
+    flowFieldMaterial.uniforms.time.value += playhead * 0.05;
     renderer.render(scene, camera);
-
-    // Render to screen
-    renderer.setRenderTarget(null);
-    renderer.render(scene, camera);
-    // gameOfLifeMaterial.uniforms.textureCurrentGeneration.value = textureCurrentGeneration;
-    // gameOfLifeMaterial.uniforms.texturePreviousGeneration.value = texturePreviousGeneration;
-    controls.update();
   };
 
   wrap.resize = ({ width, height }) => {
