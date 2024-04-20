@@ -61,7 +61,7 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   // };
 
   // Create a sphere geometry
-  const sphereGeometry = new SphereGeometry(1, 32, 32);
+  const sphereGeometry = new SphereGeometry(1, 64, 64);
 
   // Shader material setup
   const shaderMaterial = new ShaderMaterial({
@@ -85,9 +85,15 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     },
   });
 
+  const w = 64;
+  const h = 64;
+
+  let textureCurrentGeneration, texturePreviousGeneration;
+  let currentGenerationMaterial, previousGenerationMaterial;
   const gameOfLifeMaterial = new ShaderMaterial({
     uniforms: {
-      inputTexture: { value: null },
+      textureCurrentGeneration: { value: null },
+      texturePreviousGeneration: { value: null },
     },
     vertexShader: `
       varying vec2 vUv;
@@ -97,34 +103,33 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
       }
     `,
     fragmentShader: `
-      uniform sampler2D inputTexture;
-      varying vec2 vUv;
-  
-      void main() {
-        float width = float(textureSize(inputTexture, 0).x);
-        float height = float(textureSize(inputTexture, 0).y);
-        vec2 onePixel = vec2(1.0 / width, 1.0 / height);
-  
-        int alive = 0;
-        for(int dx = -1; dx <= 1; dx++) {
-          for(int dy = -1; dy <= 1; dy++) {
-            if(dx == 0 && dy == 0) continue;
-            vec2 neighborUv = vUv + vec2(float(dx), float(dy)) * onePixel;
-            // Handle wrapping
-            neighborUv.x = mod(neighborUv.x, 1.0);
-            neighborUv.y = mod(neighborUv.y, 1.0);
-            alive += int(texture(inputTexture, neighborUv).r > 0.5);
-          }
+    uniform sampler2D textureCurrentGeneration;
+    uniform sampler2D texturePreviousGeneration;
+    varying vec2 vUv;
+
+    void main() {
+      vec4 currentGeneration = texture2D(textureCurrentGeneration, vUv);
+      vec4 previousGeneration = texture2D(texturePreviousGeneration, vUv);
+
+      int sum = 0;
+      for (int i = -1; i <= 1; i++) {
+        for (int j = -1; j <= 1; j++) {
+          vec2 offset = vec2(float(i), float(j)) / 64.0;
+          sum += int(texture2D(texturePreviousGeneration, vUv + offset).r);
         }
-        float current = texture(inputTexture, vUv).r;
-        float nextState = current;
-        if(current > 0.5) { // Alive
-          nextState = (alive == 2 || alive == 3) ? 1.0 : 0.2;
-        } else { // Dead
-          nextState = (alive == 3) ? 1.0 : 0.5;
-        }
-        gl_FragColor = vec4(nextState, nextState, nextState, 1);
       }
+
+      int currentState = int(previousGeneration.r);
+      int newState = currentState;
+
+      if (currentState == 1 && (sum < 2 || sum > 3)) {
+        newState = 0;
+      } else if (currentState == 0 && sum == 3) {
+        newState = 1;
+      }
+
+      gl_FragColor = vec4(float(newState), 0.0, 0.0, 1.0);
+    }
     `,
     // side: DoubleSide,
     // wireframe: true,
@@ -136,22 +141,24 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   const boxy = new Mesh(boxgeometry, gameOfLifeMaterial);
   const sphere = new Mesh(sphereGeometry, gameOfLifeMaterial);
   scene.add(sphere);
-  scene.add(boxy);
-  boxy.position.set(5, 2, 5);
 
-  // Texture setup for storing the state
-  const gridSize = 256;
-  const data = new Float32Array(gridSize * gridSize * 4);
-  for (let i = 0; i < data.length; i += 4) {
-    data[i] = Math.random() > 0.5 ? 1.0 : 0;
+  initializeTextures();
+
+  function initializeTextures() {
+    // Texture setup for storing the state
+    const textureData = new Uint8Array(w * h * 4);
+    for (let i = 0; i < w * h; i++) {
+      textureData[i * 4] = Math.random() > 0.5 ? 255 : 0;
+    }
+    textureCurrentGeneration = new DataTexture(textureData, w, h, RGBAFormat);
+    textureCurrentGeneration.needsUpdate = true;
+
+    texturePreviousGeneration = new DataTexture(textureData, w, h, RGBAFormat);
+    texturePreviousGeneration.needsUpdate = true;
+
+    gameOfLifeMaterial.uniforms.textureCurrentGeneration.value = textureCurrentGeneration;
+    gameOfLifeMaterial.uniforms.texturePreviousGeneration.value = texturePreviousGeneration;
   }
-  let textureA = new DataTexture(data, gridSize, gridSize, RGBAFormat, FloatType);
-  textureA.needsUpdate = true;
-
-  let textureB = new DataTexture(data, gridSize, gridSize, RGBAFormat, FloatType);
-  textureB.needsUpdate = true;
-
-  // shaderMaterial.uniforms.currentState.value = textureA;
 
   const webglW = 1024;
   const webglH = 2048;
@@ -171,27 +178,17 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     depthBuffer: false,
   });
 
-  let readBuffer = targetA;
-  let writeBuffer = targetB;
-
-  readBuffer.texture = textureA;
-  writeBuffer.texture = textureB;
-
   // works like the animate function in threejs
   wrap.render = ({ playhead }) => {
-    // Swap the buffers
-    let temp = readBuffer;
-    readBuffer = writeBuffer;
-    writeBuffer = temp;
-    // Set input texture for shader
-    gameOfLifeMaterial.uniforms.inputTexture.value = readBuffer.texture;
-    renderer.setRenderTarget(writeBuffer);
+    sphere.material = gameOfLifeMaterial;
     renderer.render(scene, camera);
 
-    // // Reset to default buffer (optional, if you want to do something with the results on screen)
-    renderer.setRenderTarget(null);
-    renderer.render(scene, camera);
+    const temp = textureCurrentGeneration;
+    textureCurrentGeneration = texturePreviousGeneration;
+    texturePreviousGeneration = temp;
 
+    gameOfLifeMaterial.uniforms.textureCurrentGeneration.value = textureCurrentGeneration;
+    gameOfLifeMaterial.uniforms.texturePreviousGeneration.value = texturePreviousGeneration;
     controls.update();
   };
 
@@ -211,7 +208,7 @@ const settings = {
   pixelRatio: window.devicePixelRatio,
   animate: true,
   duration: 20_000,
-  playFps: 60,
+  playFps: 120,
   exportFps: 60,
   framesFormat: ["webm"],
   attributes: {
