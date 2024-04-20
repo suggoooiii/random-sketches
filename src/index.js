@@ -180,15 +180,21 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
 
   // works like the animate function in threejs
   wrap.render = ({ playhead }) => {
-    sphere.material = gameOfLifeMaterial;
-    renderer.render(scene, camera);
-
+    let writeBuffer = targetA;
     const temp = textureCurrentGeneration;
     textureCurrentGeneration = texturePreviousGeneration;
     texturePreviousGeneration = temp;
 
     gameOfLifeMaterial.uniforms.textureCurrentGeneration.value = textureCurrentGeneration;
-    gameOfLifeMaterial.uniforms.texturePreviousGeneration.value = texturePreviousGeneration;
+    // Render to write buffer
+    renderer.setRenderTarget(writeBuffer);
+    renderer.render(scene, camera);
+
+    // Render to screen
+    renderer.setRenderTarget(null);
+    renderer.render(scene, camera);
+    // gameOfLifeMaterial.uniforms.textureCurrentGeneration.value = textureCurrentGeneration;
+    // gameOfLifeMaterial.uniforms.texturePreviousGeneration.value = texturePreviousGeneration;
     controls.update();
   };
 
