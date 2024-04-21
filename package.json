@@ -20,6 +20,8 @@
     "@thi.ng/color-palettes": "^1.2.29",
     "@thi.ng/random": "^3.6.29",
     "eases": "^1.0.8",
+    "gl-noise": "^1.6.1",
+    "simplex-noise": "^4.0.1",
     "ssam": "^0.18.2",
     "three": "^0.161.0",
     "three-custom-shader-material": "^5.4.0"
