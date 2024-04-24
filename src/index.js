@@ -18,7 +18,9 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     alpha: true,
   });
   renderer.setPixelRatio(pixelRatio);
-  renderer.setClearColor(0xffffff, 1);
+  // renderer.setClearColor(0xffffff, 1);
+  renderer.setClearColor(0x000000, 1); // Set background to black
+
   renderer.setSize(width, height);
   document.body.appendChild(renderer.domElement);
   const cameraParams = {
@@ -138,155 +140,67 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     scene.add(curve);
   }
 
-  // Draw a curve starting at (500, 100) with 100 steps and a step length of 10
-  // drawCurve(100, 10, 100, 2);
-
-  // Create line segments based on the grid
-  // Set up dat.gui
-  const gui = new dat.GUI();
-  const gridFolder = gui.addFolder("Grid Parameters");
-  gridFolder.add(gridParams, "margin", 0, 1).onChange(updateGrid);
-  gridFolder.add(gridParams, "resolution", 1, 100).step(1).onChange(updateGrid);
-  gridFolder.add(gridParams, "defaultAngle", 0, Math.PI * 2).onChange(updateGrid);
-  gridFolder.open();
-  // Set up dat.gui for camera parameters
-  const cameraFolder = gui.addFolder("Camera");
-  cameraFolder.add(cameraParams, "positionX", -10, 10).onChange(updateCamera);
-  cameraFolder.add(cameraParams, "positionY", -10, 10).onChange(updateCamera);
-  cameraFolder.add(cameraParams, "positionZ", -10, 10).onChange(updateCamera);
-  cameraFolder.add(cameraParams, "targetX", -10, 10).onChange(updateCamera);
-  cameraFolder.add(cameraParams, "targetY", -10, 10).onChange(updateCamera);
-  cameraFolder.add(cameraParams, "targetZ", -10, 10).onChange(updateCamera);
-  cameraFolder.open();
-
-  // Instead, you can adjust OrbitControls properties for a similar effect.
-  const orbitControlsFolder = gui.addFolder("OrbitControls");
-  orbitControlsFolder.add(controls, "enableZoom").name("Zoom Enabled");
-  orbitControlsFolder.add(controls, "enableRotate").name("Rotate Enabled");
-  orbitControlsFolder.add(controls, "enablePan").name("Pan Enabled");
-  orbitControlsFolder.open();
-  // Function to update the camera position and target when parameters change
-  function updateCamera() {
-    camera.position.set(cameraParams.positionX, cameraParams.positionY, cameraParams.positionZ);
-    camera.lookAt(new THREE.Vector3(cameraParams.targetX, cameraParams.targetY, cameraParams.targetZ));
-  }
-
-  // Define the material with a GLSL shader
-  const material = new THREE.ShaderMaterial({
-    vertexShader: `
-      uniform float time;
-      uniform float amplitude;
-      uniform float frequency;
-      varying vec2 vUv;
-
-      void main() {
-          vUv = uv;
-          vec3 pos = position;
-          float PI = 3.1415926535897932384626433832795;
-          // float amplitude = 0.5;
-          // float frequency = 20.0;
-          float wave = sin(frequency * pos.x + time) * amplitude;
-          pos.z = wave;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
-      }
-  `,
-    fragmentShader: `
-      varying vec2 vUv;
-
-      void main() {
-          gl_FragColor = vec4(vUv, 0.5, 1.0);
-      }
-  `,
-    uniforms: {
-      time: { value: 0.0 },
-      amplitude: { value: 0.5 },
-      frequency: { value: 20.0 },
-    },
-  });
   const params = {
     Amplitude: 0.5,
     Frequency: 20.0,
   };
-  gui.add(params, "Amplitude", 0, 2).onChange((value) => {
-    mesh.material.uniforms.amplitude.value = value;
-  });
-  gui.add(params, "Frequency", 0, 40).onChange((value) => {
-    mesh.material.uniforms.frequency.value = value;
-  });
-  // Define the geometry
-  const geometry = new THREE.PlaneGeometry(10, 10, 200, 200);
-  // Create the mesh and add it to the scene
-  const mesh = new THREE.Mesh(geometry, material);
-  scene.add(mesh);
-  // Function to update the grid and line segments when parameters change
-  function updateGrid() {
-    // Remove existing line segments
-    lineGroup.clear();
+  // Create a line segment geometry and a custom shader material
+  const segmentCount = 5000;
+  const positions = new Float32Array(segmentCount * 6);
+  const colors = new Float32Array(segmentCount * 6);
 
-    // Recalculate grid dimensions
-    const leftX = gridParams.width * -gridParams.margin;
-    const rightX = gridParams.width * (1 + gridParams.margin);
-    const topY = gridParams.height * -gridParams.margin;
-    const bottomY = gridParams.height * (1 + gridParams.margin);
-    const numColumns = Math.floor((rightX - leftX) / gridParams.resolution);
-    const numRows = Math.floor((bottomY - topY) / gridParams.resolution);
+  for (let i = 0; i < segmentCount; i++) {
+    const x = Math.random() * 10 - 5;
+    const y = Math.random() * 10 - 5;
+    const z = 0;
 
-    // Check if numColumns and numRows are within valid range
-    if (numColumns > 0 && numRows > 0) {
-      // Recreate the grid with updated parameters
-      const grid = new Array(numColumns).fill(null).map(() => new Array(numRows).fill(gridParams.defaultAngle));
+    positions[i * 6] = x;
+    positions[i * 6 + 1] = y;
+    positions[i * 6 + 2] = z;
+    positions[i * 6 + 3] = x;
+    positions[i * 6 + 4] = y;
+    positions[i * 6 + 5] = z;
 
-      // Create new line segments based on the updated grid
-      createLineSegments();
-    }
+    colors[i * 6] = Math.random();
+    colors[i * 6 + 1] = Math.random();
+    colors[i * 6 + 2] = Math.random();
+    colors[i * 6 + 3] = Math.random();
+    colors[i * 6 + 4] = Math.random();
+    colors[i * 6 + 5] = Math.random();
   }
 
-  function onMove() {
-    document.addEventListener("mousemove", (event) => {
-      const mouseX = (event.clientX / width) * 2 - 1;
-      const mouseY = -(event.clientY / height) * 2 + 1;
-      flowFieldMaterial.uniforms.mousePosition.value.set(mouseX, mouseY);
-    });
-  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 
-  // Helper function to calculate the flow field angle at a given position and time
-  function getFlowFieldAngle(uv, time) {
-    const noise2D = createNoise2D();
-    const value2d = noise2D(uv.x * 0.1 + time * 0.1, uv.y * 0.1 + time * 0.1) * Math.PI * 2;
-    return value2d;
-  }
-  // Create a line material
-
-  // Create a line geometry
-  // const lineGeometry = new THREE.BufferGeometry();
-  // const linePositions = new Float32Array(1000 * 3); // Adjust the number of lines as needed
-  // lineGeometry.setAttribute("position", new THREE.BufferAttribute(linePositions, 2));
-
-  // Create a line mesh
-  // const lineMesh = new THREE.LineSegments(lineGeometry, lineMaterial);
-  // scene.add(lineMesh);
-
-  const flowfieldMaterial = new THREE.ShaderMaterial({
+  // Define the material with a GLSL shader
+  const material = new THREE.ShaderMaterial({
     vertexShader: flowFieldVertexShader,
     fragmentShader: flowFieldFragmentShader,
     uniforms: {
-      time: { value: 0 },
-      resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-      mousePosition: { value: new THREE.Vector2() },
+      time: { value: 0.0 },
+      // amplitude: { value: 0.5 },
+      // frequency: { value: 20.0 },
     },
   });
-  // createLineSegments();
 
-  // Create a plane geometry and mesh for the flow field
-  // const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-  // Create line segments within the plane geometry
+  // Create a line segment object using the geometry and material, and add it to the scene
+  const lineSegments = new THREE.LineSegments(geometry, material);
+  scene.add(lineSegments);
+  // gui.add(params, "Amplitude", 0, 2).onChange((value) => {
+  //   mesh.material.uniforms.amplitude.value = value;
+  // });
+  // gui.add(params, "Frequency", 0, 40).onChange((value) => {
+  //   mesh.material.uniforms.frequency.value = value;
+  // });
+  // Define the geometry
+  // Create the mesh and add it to the scene
+  // const mesh = new THREE.Mesh(geometry, material);
+  // scene.add(mesh);
+  // Function to update the grid and line segments when parameters change
 
-  // const planeMesh = new THREE.Mesh(planeGeometry, flowFieldMaterial);
-  // scene.add(planeMesh);
-
-  camera.position.z = 10;
   wrap.render = ({ playhead }) => {
-    mesh.material.uniforms.time.value += playhead;
+    material.uniforms.time.value += playhead;
     controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = trueDSA
     renderer.render(scene, camera);
   };
