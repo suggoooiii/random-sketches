@@ -19,6 +19,7 @@
     "@thi.ng/color": "^5.6.16",
     "@thi.ng/color-palettes": "^1.2.29",
     "@thi.ng/random": "^3.6.29",
+    "dat.gui": "^0.7.9",
     "eases": "^1.0.8",
     "gl-noise": "^1.6.1",
     "simplex-noise": "^4.0.1",
