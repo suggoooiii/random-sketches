@@ -1,212 +1,214 @@
 import { ssam } from "ssam";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import baseVert from "./shaders/base.vert";
-import baseFrag from "./shaders/base.frag";
-import flowFieldVertexShader from "./shaders/flowfield.vert";
-import flowFieldFragmentShader from "./shaders/flowfield.frag";
-import { createNoise2D } from "simplex-noise";
+// import baseVert from "./shaders/base.vert";
+// import baseFrag from "./shaders/base.frag";
+// import flowFieldVertexShader from "./shaders/flowfield.vert";
+// import flowFieldFragmentShader from "./shaders/flowfield.frag";
 import * as dat from "dat.gui";
 
 const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.z = 5;
 
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
-    alpha: true,
   });
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  // Create a GUI instance
+  const gui = new dat.GUI();
+
+  // function createFBO() {
+  //   // width and height of FBO
+  //   const width = 512;
+  //   const height = 512;
+  //   const fbo = new THREE.WebGLRenderTarget(width, height, {
+  //     minFilter: THREE.LinearFilter,
+  //     magFilter: THREE.LinearFilter,
+  //     wrapS: THREE.RepeatWrapping,
+  //     wrapT: THREE.RepeatWrapping,
+  //   });
+  //   return fbo;
+  // }
+
   renderer.setPixelRatio(pixelRatio);
   // renderer.setClearColor(0xffffff, 1);
   renderer.setClearColor(0x000000, 1); // Set background to black
 
   renderer.setSize(width, height);
   document.body.appendChild(renderer.domElement);
-  const cameraParams = {
-    positionX: 0,
-    positionY: 0,
-    positionZ: -20,
-    targetX: 0,
-    targetY: 0,
-    targetZ: 0,
-  };
 
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.set(cameraParams.targetX, cameraParams.targetY, cameraParams.targetZ);
-
-  // Initialize camera parameters
-
-  let planeParams = {
-    width: 10,
-    height: 10,
-    widthSegments: 10,
-    heightSegments: 10,
-  };
-  let planeGeometry = new THREE.PlaneGeometry(
-    planeParams.width,
-    planeParams.height,
-    planeParams.widthSegments,
-    planeParams.heightSegments,
-  );
-
-  // Initialize grid parameters
-  const gridParams = {
-    width: 200,
-    height: 200,
-    margin: 0.5, // 50% extra margin
-    resolution: 5, // Number of pixels per grid cell
-    defaultAngle: Math.PI * 0.25, // Default flow field angle in radians
-    angleMultiplier: 2, // Multiplier for angle variation
-  };
-
-  let clock = new THREE.Clock();
-  const angleExpression = (playhead) => playhead * Math.PI * gridParams.angleMultiplier;
-
-  // Calculate grid dimensions
-  const leftX = gridParams.width * -gridParams.margin;
-  const rightX = gridParams.width * (1 + gridParams.margin);
-  const topY = gridParams.height * -gridParams.margin;
-  const bottomY = gridParams.height * (1 + gridParams.margin);
-  const numColumns = (rightX - leftX) / gridParams.resolution;
-  const numRows = (bottomY - topY) / gridParams.resolution;
-
-  // Initialize the grid with default angles
-  const grid = new Array(numColumns).fill(null).map(() => new Array(numRows).fill(gridParams.defaultAngle));
-
-  // Create a line material
-  const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
-
-  // Create a group to hold all the line segments
-  const lineGroup = new THREE.Group();
-  scene.add(lineGroup);
-  camera.position.z = 5;
-
-  // Function to create line segments based on the grid
-  function createLineSegments(playhead) {
-    // let modifier = playhead * Math.PI * gridParams.angleMultiplier;
-    for (let column = 0; column < numColumns; column++) {
-      for (let row = 0; row < numRows; row++) {
-        const startX = leftX + column * gridParams.resolution;
-        const startY = topY + row * gridParams.resolution;
-        const angle = grid[column][row];
-        const direction = new THREE.Vector2(Math.cos(angle), Math.sin(angle));
-        const endX = startX + direction.x * gridParams.resolution;
-        const endY = startY + direction.y * gridParams.resolution;
-
-        const lineGeometry = new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(startX, startY, 0),
-          new THREE.Vector3(endX, endY, 0),
-        ]);
-        const line = new THREE.Line(lineGeometry, lineMaterial);
-        lineGroup.add(line);
-      }
-    }
-  }
-
-  // Function to draw a curve based on the flow field grid
-  function drawCurve(startX, startY, numSteps, stepLength) {
-    const curveGeometry = new THREE.BufferGeometry();
-    const curveVertices = [];
-
-    let x = startX,
-      y = startY;
-    const leftX = gridParams.width * -gridParams.margin;
-    const topY = gridParams.height * -gridParams.margin;
-    const resolution = gridParams.resolution;
-
-    for (let n = 0; n < numSteps; n++) {
-      curveVertices.push(new THREE.Vector3(x, y, 0));
-
-      const xOffset = x - leftX;
-      const yOffset = y - topY;
-      const columnIndex = Math.floor(xOffset / resolution);
-      const rowIndex = Math.floor(yOffset / resolution);
-
-      // Ensure we're within bounds
-      const gridAngle =
-        grid[Math.min(Math.max(columnIndex, 0), numColumns - 1)][Math.min(Math.max(rowIndex, 0), numRows - 1)];
-
-      const xStep = stepLength * Math.cos(gridAngle);
-      const yStep = stepLength * Math.sin(gridAngle);
-
-      x += xStep;
-      y += yStep;
-    }
-
-    curveGeometry.setFromPoints(curveVertices);
-    const curveMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
-    const curve = new THREE.Line(curveGeometry, curveMaterial);
-    scene.add(curve);
-  }
-
-  const params = {
-    Amplitude: 0.5,
-    Frequency: 20.0,
-  };
-  // Create a line segment geometry and a custom shader material
-  const segmentCount = 5000;
-  const positions = new Float32Array(segmentCount * 6);
-  const colors = new Float32Array(segmentCount * 6);
-
-  for (let i = 0; i < segmentCount; i++) {
-    const x = Math.random() * 10 - 5;
-    const y = Math.random() * 10 - 5;
-    const z = 0;
-
-    positions[i * 6] = x;
-    positions[i * 6 + 1] = y;
-    positions[i * 6 + 2] = z;
-    positions[i * 6 + 3] = x;
-    positions[i * 6 + 4] = y;
-    positions[i * 6 + 5] = z;
-
-    colors[i * 6] = Math.random();
-    colors[i * 6 + 1] = Math.random();
-    colors[i * 6 + 2] = Math.random();
-    colors[i * 6 + 3] = Math.random();
-    colors[i * 6 + 4] = Math.random();
-    colors[i * 6 + 5] = Math.random();
-  }
-
+  // Particle geometry and material using a shader
+  const particles = 10000;
   const geometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(particles * 3);
+  const velocities = new Float32Array(particles * 3);
+  for (let i = 0; i < particles * 3; i++) {
+    positions[i] = (Math.random() * 2 - 1) * 5;
+    velocities[i] = 0;
+  }
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute("velocity", new THREE.BufferAttribute(velocities, 3));
 
-  // Define the material with a GLSL shader
   const material = new THREE.ShaderMaterial({
-    vertexShader: flowFieldVertexShader,
-    fragmentShader: flowFieldFragmentShader,
     uniforms: {
-      time: { value: 0.0 },
-      // amplitude: { value: 0.5 },
-      // frequency: { value: 20.0 },
+      pointSize: { value: 2.0 },
+      attractor: { value: new THREE.Vector3(0, 0, 0) },
+      time: { value: 0 },
+      color: { value: new THREE.Color(0xffffff) },
     },
+    vertexShader: `
+    precision highp float;
+    uniform vec3 attractor;
+    attribute vec3 velocity;
+    uniform float pointSize;
+    varying vec3 vColor;
+    uniform float time;
+
+    void main() {
+      
+        vec3 acc = attractor - position;
+        vec3 vel = velocity + 0.05 * acc; // Attraction strength
+        vel *= 0.95; // Damping
+
+        vec3 newPos = position + vel;
+        vColor = vec3(vel.x + 0.5, vel.y + 0.5, vel.z + 0.5); // Color based on velocity
+        float colorFactor = sin(time + length(newPos) * 0.5);
+        vColor += vec3(colorFactor, 0.5, 1.0 - colorFactor);
+
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(newPos, 1.0);
+        gl_PointSize = pointSize;
+    }
+`,
+    fragmentShader: `
+    precision highp float;
+    varying vec3 vColor;
+
+    void main() {
+        float intensity = 10.0 / length(gl_PointCoord - vec2(0.5, 0.5));
+        gl_FragColor = vec4(vColor * intensity, 1.0);
+      }
+`,
+    blending: THREE.AdditiveBlending,
+    depthTest: false,
+    transparent: true,
   });
 
-  // Create a line segment object using the geometry and material, and add it to the scene
-  const lineSegments = new THREE.LineSegments(geometry, material);
-  scene.add(lineSegments);
-  // gui.add(params, "Amplitude", 0, 2).onChange((value) => {
-  //   mesh.material.uniforms.amplitude.value = value;
-  // });
-  // gui.add(params, "Frequency", 0, 40).onChange((value) => {
-  //   mesh.material.uniforms.frequency.value = value;
-  // });
-  // Define the geometry
-  // Create the mesh and add it to the scene
-  // const mesh = new THREE.Mesh(geometry, material);
-  // scene.add(mesh);
-  // Function to update the grid and line segments when parameters change
+  const particleSystem = new THREE.Points(geometry, material);
+  scene.add(particleSystem);
 
+  // Create a render target to hold trail effects
+  const renderTarget = new THREE.WebGLRenderTarget(512, 512, {
+    minFilter: THREE.LinearFilter,
+    magFilter: THREE.NearestFilter,
+    format: THREE.RGBAFormat,
+  });
+
+  const trailMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+      texture: { value: renderTarget.texture },
+      resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
+      decay: { value: 0.95 }, // Controls how fast the trails fade; closer to 1 is slower
+    },
+    vertexShader: `
+    precision highp float;
+    varying vec2 vUv;
+
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+    `,
+    fragmentShader: `
+        precision highp float;
+
+        uniform sampler2D texture;
+        uniform vec2 resolution;
+        uniform float decay;
+        varying vec2 vUv;
+
+        void main() {
+          vec4 color = texture2D(texture, vUv);
+          gl_FragColor = vec4(color.rgb * decay,1.0);  // Apply decay to fade the trail
+        }
+    `,
+    blending: THREE.CustomBlending,
+    blendEquation: THREE.AddEquation,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneMinusSrcAlphaFactor,
+    depthTest: false,
+    transparent: true,
+  });
+
+  const trailMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), trailMaterial);
+  scene.add(trailMesh);
+
+  function makeGUI() {
+    const TWEAKS = {
+      pointSize: 2.0,
+      attractorX: 0,
+      attractorY: 0,
+      attractorZ: 0,
+      color: "#ffffff",
+    };
+    // GUI for particle point size
+    gui.add(TWEAKS, "pointSize", 1.0, 10.0).onChange((value) => {
+      material.uniforms.pointSize.value = value;
+    });
+
+    // GUI for attractor position
+    gui.add(TWEAKS, "attractorX", -5, 5).onChange((value) => {
+      material.uniforms.attractor.value.x = value;
+    });
+    gui.add(TWEAKS, "attractorY", -5, 5).onChange((value) => {
+      material.uniforms.attractor.value.y = value;
+    });
+    gui.add(TWEAKS, "attractorZ", -5, 5).onChange((value) => {
+      material.uniforms.attractor.value.z = value;
+    });
+    gui.addColor(TWEAKS, "color").onChange((value) => {
+      material.uniforms.color.value.setStyle(value);
+    });
+  }
+
+  function onMouseMove() {
+    document.addEventListener("mousemove", function (event) {
+      const x = (event.clientX / window.innerWidth) * 2 - 1;
+      const y = -(event.clientY / window.innerHeight) * 2 + 1;
+      const vector = new THREE.Vector3(x, y, 0);
+      vector.unproject(camera);
+      const dir = vector.sub(camera.position).normalize();
+      const distance = -camera.position.z / dir.z;
+      const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+      material.uniforms.attractor.value = pos;
+    });
+  }
+
+  makeGUI();
+  onMouseMove();
   wrap.render = ({ playhead }) => {
-    material.uniforms.time.value += playhead;
+    // Render the particle system to the render target
+    renderer.setRenderTarget(renderTarget);
+    renderer.clear();
+
+    // Render the trail effect onto the screen
+    renderer.setRenderTarget(null);
+    trailMesh.material.uniforms.texture.value = renderTarget.texture;
+    const anim = playhead * Math.PI * 0.05;
+    material.uniforms.time.value += anim;
+    particleSystem.rotation.y += 0.005;
+    // particleSystem.rotation.x += anim;
+    particleSystem.rotation.z += 0.005;
     controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = trueDSA
     renderer.render(scene, camera);
+    geometry.attributes.position.needsUpdate = true;
   };
 
   wrap.resize = ({ width, height }) => {
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setSize(width, height);
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
   };
