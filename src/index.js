@@ -15,7 +15,18 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
+    precision: "highp",
+    powerPreference: "high-performance",
+    preserveDrawingBuffer: true,
+    alpha: true,
   });
+
+  function hexToRgb(hex) {
+    let r = parseInt(hex.slice(0, 2), 16);
+    let g = parseInt(hex.slice(2, 4), 16);
+    let b = parseInt(hex.slice(4, 6), 16);
+    return { r, g, b };
+  }
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   // Create a GUI instance
@@ -35,52 +46,62 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   // }
 
   renderer.setPixelRatio(pixelRatio);
-  // renderer.setClearColor(0xffffff, 1);
-  renderer.setClearColor(0x000000, 1); // Set background to black
+  renderer.setClearColor(0x000000, 1);
 
   renderer.setSize(width, height);
   document.body.appendChild(renderer.domElement);
 
   // Particle geometry and material using a shader
-  const particles = 10000;
+  const particles = 90000;
   const geometry = new THREE.BufferGeometry();
   const positions = new Float32Array(particles * 3);
   const velocities = new Float32Array(particles * 3);
   for (let i = 0; i < particles * 3; i++) {
     positions[i] = (Math.random() * 2 - 1) * 5;
-    velocities[i] = 0;
+    velocities[i] = (Math.random() * 2 - 1) * 2.5;
   }
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("velocity", new THREE.BufferAttribute(velocities, 3));
-
+  const TWEAKS = {
+    pointSize: 2.0,
+    attractorX: 0,
+    attractorY: 0,
+    attractorZ: 0,
+    color: "#ffffff",
+    decay: 0.95,
+    colorFactor: 0.5, // Initial value for colorFactor
+  };
   const material = new THREE.ShaderMaterial({
     uniforms: {
       pointSize: { value: 2.0 },
       attractor: { value: new THREE.Vector3(0, 0, 0) },
       time: { value: 0 },
-      color: { value: new THREE.Color(0xffffff) },
+      colorFactor: { value: TWEAKS.colorFactor }, // Initial value for colorFactor
+      decay: { value: TWEAKS.decay }, // Add decay here
     },
     vertexShader: `
     precision highp float;
-    uniform vec3 attractor;
+
     attribute vec3 velocity;
-    uniform float pointSize;
     varying vec3 vColor;
+    
+    uniform vec3 attractor;
+    uniform float pointSize;
     uniform float time;
+    uniform float decay;  // Declare decay
+    uniform float colorFactor; // Declare colorFactor
 
     void main() {
-      
-        vec3 acc = attractor - position;
-        vec3 vel = velocity + 0.05 * acc; // Attraction strength
-        vel *= 0.95; // Damping
+      vec3 acc = attractor - position;
+      vec3 vel = velocity + 0.5 * acc; // Attraction strength
+      vel *= decay; // Damping
 
-        vec3 newPos = position + vel;
-        vColor = vec3(vel.x + 0.5, vel.y + 0.5, vel.z + 0.5); // Color based on velocity
-        float colorFactor = sin(time + length(newPos) * 0.5);
-        vColor += vec3(colorFactor, 0.5, 1.0 - colorFactor);
+      vec3 newPos = position + vel;
+      float dynamicColorFactor = sin(time + length(newPos) * colorFactor); // Use colorFactor
+      vColor = vec3(vel.x + 0.5, vel.y + 0.5, vel.z + 0.5) + vec3(dynamicColorFactor, 0.5, 1.0 - dynamicColorFactor);
 
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(newPos, 1.0);
-        gl_PointSize = pointSize;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(newPos, 1.0);
+      gl_PointSize = pointSize ;
     }
 `,
     fragmentShader: `
@@ -92,9 +113,10 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
         gl_FragColor = vec4(vColor * intensity, 1.0);
       }
 `,
-    blending: THREE.AdditiveBlending,
+    blending: THREE.CustomBlending,
     depthTest: false,
     transparent: true,
+    blendColor: THREE.OneMinusConstantColorFactor,
   });
 
   const particleSystem = new THREE.Points(geometry, material);
@@ -111,7 +133,7 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     uniforms: {
       texture: { value: renderTarget.texture },
       resolution: { value: new THREE.Vector2(window.innerWidth, window.innerHeight) },
-      decay: { value: 0.95 }, // Controls how fast the trails fade; closer to 1 is slower
+      decay: { value: TWEAKS.decay }, // Controls how fast the trails fade; closer to 1 is slower
     },
     vertexShader: `
     precision highp float;
@@ -131,7 +153,7 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
         varying vec2 vUv;
 
         void main() {
-          vec4 color = texture2D(texture, vUv);
+          vec4 color = texture2D(texture, vUv) * decay;
           gl_FragColor = vec4(color.rgb * decay,1.0);  // Apply decay to fade the trail
         }
     `,
@@ -143,63 +165,61 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     transparent: true,
   });
 
-  const trailMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), trailMaterial);
-  scene.add(trailMesh);
+  // const trailMesh = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), trailMaterial);
+  // scene.add(trailMesh);
 
-  function makeGUI() {
-    const TWEAKS = {
-      pointSize: 2.0,
-      attractorX: 0,
-      attractorY: 0,
-      attractorZ: 0,
-      color: "#ffffff",
-    };
-    // GUI for particle point size
-    gui.add(TWEAKS, "pointSize", 1.0, 10.0).onChange((value) => {
-      material.uniforms.pointSize.value = value;
+  // GUI for particle point size
+  gui.add(TWEAKS, "pointSize", 1.0, 10.0).onChange((value) => {
+    material.uniforms.pointSize.value = value;
+  });
+
+  // GUI for attractor position
+  gui.add(TWEAKS, "attractorX", -5, 5).onChange((value) => {
+    material.uniforms.attractor.value.x = value;
+  });
+  gui.add(TWEAKS, "attractorY", -5, 5).onChange((value) => {
+    material.uniforms.attractor.value.y = value;
+  });
+  gui.add(TWEAKS, "attractorZ", -5, 5).onChange((value) => {
+    material.uniforms.attractor.value.z = value;
+  });
+  gui.addColor(TWEAKS, "color").onChange((value) => {
+    console.log(value);
+  });
+  gui
+    .add(TWEAKS, "decay", 0.0, 10.0)
+    .step(0.01)
+    .onChange((value) => {
+      material.uniforms.decay.value = value;
+    });
+  // GUI control for colorFactor
+  gui
+    .add(TWEAKS, "colorFactor", 0.1, 20.0)
+    .step(0.1)
+    .onChange((value) => {
+      material.uniforms.colorFactor.value = value;
     });
 
-    // GUI for attractor position
-    gui.add(TWEAKS, "attractorX", -5, 5).onChange((value) => {
-      material.uniforms.attractor.value.x = value;
-    });
-    gui.add(TWEAKS, "attractorY", -5, 5).onChange((value) => {
-      material.uniforms.attractor.value.y = value;
-    });
-    gui.add(TWEAKS, "attractorZ", -5, 5).onChange((value) => {
-      material.uniforms.attractor.value.z = value;
-    });
-    gui.addColor(TWEAKS, "color").onChange((value) => {
-      material.uniforms.color.value.setStyle(value);
-    });
-  }
+  // function onMouseMove() {
+  //   document.addEventListener("mousemove", function (event) {
+  //     const x = (event.clientX / window.innerWidth) * 2 - 1;
+  //     const y = -(event.clientY / window.innerHeight) * 2 + 1;
+  //     const vector = new THREE.Vector3(x, y, 0);
+  //     vector.unproject(camera);
+  //     const dir = vector.sub(camera.position).normalize();
+  //     const distance = -camera.position.z / dir.z;
+  //     const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+  //     material.uniforms.attractor.value = pos;
+  //   });
+  // }
 
-  function onMouseMove() {
-    document.addEventListener("mousemove", function (event) {
-      const x = (event.clientX / window.innerWidth) * 2 - 1;
-      const y = -(event.clientY / window.innerHeight) * 2 + 1;
-      const vector = new THREE.Vector3(x, y, 0);
-      vector.unproject(camera);
-      const dir = vector.sub(camera.position).normalize();
-      const distance = -camera.position.z / dir.z;
-      const pos = camera.position.clone().add(dir.multiplyScalar(distance));
-      material.uniforms.attractor.value = pos;
-    });
-  }
-
-  makeGUI();
-  onMouseMove();
+  // onMouseMove();
   wrap.render = ({ playhead }) => {
-    // Render the particle system to the render target
-    renderer.setRenderTarget(renderTarget);
-    renderer.clear();
-
-    // Render the trail effect onto the screen
-    renderer.setRenderTarget(null);
-    trailMesh.material.uniforms.texture.value = renderTarget.texture;
     const anim = playhead * Math.PI * 0.05;
     material.uniforms.time.value += anim;
     particleSystem.rotation.y += 0.005;
+    material.uniforms.decay.value = TWEAKS.decay;
+    material.uniforms.colorFactor.value = TWEAKS.colorFactor;
     // particleSystem.rotation.x += anim;
     particleSystem.rotation.z += 0.005;
     controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = trueDSA
