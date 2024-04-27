@@ -56,33 +56,44 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   const geometry = new THREE.BufferGeometry();
   const positions = new Float32Array(particles * 3);
   const velocities = new Float32Array(particles * 3);
+  const colors = new Float32Array(particles * 3);
+  const sizes = new Float32Array(particles);
   for (let i = 0; i < particles * 3; i++) {
     positions[i] = (Math.random() * 2 - 1) * 5;
-    velocities[i] = (Math.random() * 2 - 1) * 2.5;
+    velocities[i] = (Math.random() * 2 - 1) * 0.2;
+    colors[i * 3 + 0] = (Math.random() * 2 - 1) * 5; // Red
+    colors[i * 3 + 1] = (Math.random() * 2 - 1) * 5; // Green
+    colors[i * 3 + 2] = (Math.random() * 2 - 1) * 5; // Blue
+    sizes[i] = Math.random() * 5 + 0.5; // Size between 5 and 25
   }
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("velocity", new THREE.BufferAttribute(velocities, 3));
+  geometry.setAttribute("acolor", new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
   const TWEAKS = {
-    pointSize: 2.0,
+    pointSize: 1.0,
+    time: 0,
     attractorX: 0,
     attractorY: 0,
     attractorZ: 0,
-    color: "#ffffff",
     decay: 0.95,
-    colorFactor: 0.5, // Initial value for colorFactor
+    colorFactor: 0.0, // Initial value for colorFactor
+    modulationFactor: 1.0, // Initial value
   };
   const material = new THREE.ShaderMaterial({
     uniforms: {
       pointSize: { value: 2.0 },
       attractor: { value: new THREE.Vector3(0, 0, 0) },
-      time: { value: 0 },
+      time: { value: TWEAKS.time },
       colorFactor: { value: TWEAKS.colorFactor }, // Initial value for colorFactor
       decay: { value: TWEAKS.decay }, // Add decay here
+      modulationFactor: { value: TWEAKS.modulationFactor }, // New uniform
     },
     vertexShader: `
     precision highp float;
 
     attribute vec3 velocity;
+    attribute float size;  // Add this line to access each particle's size attribute
     varying vec3 vColor;
     
     uniform vec3 attractor;
@@ -90,33 +101,47 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     uniform float time;
     uniform float decay;  // Declare decay
     uniform float colorFactor; // Declare colorFactor
+    uniform float modulationFactor; // Declare modulationFactor
 
     void main() {
       vec3 acc = attractor - position;
-      vec3 vel = velocity + 0.5 * acc; // Attraction strength
+      vec3 vel = velocity + 0.05 * acc; // Attraction strength
       vel *= decay; // Damping
 
       vec3 newPos = position + vel;
-      float dynamicColorFactor = sin(time + length(newPos) * colorFactor); // Use colorFactor
-      vColor = vec3(vel.x + 0.5, vel.y + 0.5, vel.z + 0.5) + vec3(dynamicColorFactor, 0.5, 1.0 - dynamicColorFactor);
+      float dynamicColor = sin((time + length(newPos) * colorFactor) * modulationFactor); // Adjust sin calculation
+      vColor = vec3(vel.x + 0.5, vel.y + 0.5, vel.z + 0.5) + vec3(dynamicColor, 0.5, 1.0 - dynamicColor);
 
       gl_Position = projectionMatrix * modelViewMatrix * vec4(newPos, 1.0);
-      gl_PointSize = pointSize ;
+      gl_PointSize = size * pointSize ;  // Set the point size from the size attribute
     }
 `,
     fragmentShader: `
     precision highp float;
+
+
     varying vec3 vColor;
+    uniform float time; // For color animation
 
     void main() {
-        float intensity = 10.0 / length(gl_PointCoord - vec2(0.5, 0.5));
-        gl_FragColor = vec4(vColor * intensity, 1.0);
+
+
+
+        float dist = length(gl_PointCoord - vec2(0.5, 0.5));
+        float intensity = smoothstep(0.4, 0.0, dist); // Smoother intensity fade
+
+        vec3 dynamicColor = vColor * (0.5 + 0.5 * sin(time + length(vColor)));  // Example of dynamic color modulation
+        gl_FragColor = vec4(dynamicColor * intensity, 1.0);
+        // vec3 dynamicColor = vColor * (0.5 + 0.5 * sin(time + vColor)); // Dynamic color change
+        // gl_FragColor = vec4(vColor * intensity, 1.0);
       }
 `,
-    blending: THREE.CustomBlending,
+    blending: THREE.AdditiveBlending,
     depthTest: false,
     transparent: true,
-    blendColor: THREE.OneMinusConstantColorFactor,
+    // blendEquation: THREE.AddEquation,
+
+    // blendColor: THREE.OneMinusConstantColorFactor,
   });
 
   const particleSystem = new THREE.Points(geometry, material);
@@ -169,7 +194,7 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   // scene.add(trailMesh);
 
   // GUI for particle point size
-  gui.add(TWEAKS, "pointSize", 1.0, 10.0).onChange((value) => {
+  gui.add(TWEAKS, "pointSize", 0.0, 100.0).onChange((value) => {
     material.uniforms.pointSize.value = value;
   });
 
@@ -183,45 +208,70 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   gui.add(TWEAKS, "attractorZ", -5, 5).onChange((value) => {
     material.uniforms.attractor.value.z = value;
   });
-  gui.addColor(TWEAKS, "color").onChange((value) => {
-    console.log(value);
-  });
+
   gui
-    .add(TWEAKS, "decay", 0.0, 10.0)
+    .add(TWEAKS, "decay", -10.0, 200.0)
     .step(0.01)
     .onChange((value) => {
       material.uniforms.decay.value = value;
     });
   // GUI control for colorFactor
   gui
-    .add(TWEAKS, "colorFactor", 0.1, 20.0)
+    .add(TWEAKS, "colorFactor", -10.0, 200.0)
     .step(0.1)
     .onChange((value) => {
       material.uniforms.colorFactor.value = value;
     });
+  gui
+    .add(TWEAKS, "modulationFactor", -10.0, 200.0)
+    .step(0.1)
+    .onChange((value) => {
+      material.uniforms.modulationFactor.value = value;
+    });
+  gui
+    .add(TWEAKS, "time", 0.1, 1000.0)
+    .step(0.1)
+    .onChange((value) => {
+      material.uniforms.time.value = value;
+    });
 
-  // function onMouseMove() {
-  //   document.addEventListener("mousemove", function (event) {
-  //     const x = (event.clientX / window.innerWidth) * 2 - 1;
-  //     const y = -(event.clientY / window.innerHeight) * 2 + 1;
-  //     const vector = new THREE.Vector3(x, y, 0);
-  //     vector.unproject(camera);
-  //     const dir = vector.sub(camera.position).normalize();
-  //     const distance = -camera.position.z / dir.z;
-  //     const pos = camera.position.clone().add(dir.multiplyScalar(distance));
-  //     material.uniforms.attractor.value = pos;
-  //   });
-  // }
+  function onMouseMove() {
+    document.addEventListener("mousemove", function (event) {
+      const x = (event.clientX / window.innerWidth) * 2 - 1;
+      const y = -(event.clientY / window.innerHeight) * 2 + 1;
+      const vector = new THREE.Vector3(x, y, 0);
+      vector.unproject(camera);
+      const dir = vector.sub(camera.position).normalize();
+      const distance = -camera.position.z / dir.z;
+      const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+      material.uniforms.attractor.value = pos;
+    });
+  }
 
-  // onMouseMove();
+  function onMouseMove2() {
+    document.addEventListener("mousemove", (event) => {
+      const mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+      const mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      const velocities = geometry.attributes.velocity.array;
+      for (let i = 0; i < particles; i++) {
+        velocities[i * 3] += mouseX * 0.5;
+        velocities[i * 3 + 1] += mouseY * 2.05;
+      }
+    });
+  }
   wrap.render = ({ playhead }) => {
     const anim = playhead * Math.PI * 0.05;
-    material.uniforms.time.value += anim;
-    particleSystem.rotation.y += 0.005;
+    const anim2 = Math.sin(Math.sqrt(9 ^ (2 - playhead) ^ 2)) * playhead;
+    material.uniforms.time.value += anim + anim2;
+    // particleSystem.rotation.y += 0.005;
     material.uniforms.decay.value = TWEAKS.decay;
     material.uniforms.colorFactor.value = TWEAKS.colorFactor;
+    // onMouseMove();
     // particleSystem.rotation.x += anim;
-    particleSystem.rotation.z += 0.005;
+    // particleSystem.rotation.z += 0.005;
+    // onMouseMove();
+
     controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = trueDSA
     renderer.render(scene, camera);
     geometry.attributes.position.needsUpdate = true;
