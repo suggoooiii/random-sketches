@@ -5,7 +5,7 @@ import * as dat from "dat.gui";
 
 const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.z = 5;
 
   const renderer = new THREE.WebGLRenderer({
@@ -14,8 +14,8 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     precision: "highp",
     powerPreference: "high-performance",
     preserveDrawingBuffer: true,
-    alpha: true,
   });
+  camera.position.set(0, 0, 5);
 
   function hexToRgb(hex) {
     let r = parseInt(hex.slice(0, 2), 16);
