@@ -1,10 +1,6 @@
 import { ssam } from "ssam";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-// import baseVert from "./shaders/base.vert";
-// import baseFrag from "./shaders/base.frag";
-// import flowFieldVertexShader from "./shaders/flowfield.vert";
-// import flowFieldFragmentShader from "./shaders/flowfield.frag";
 import * as dat from "dat.gui";
 
 const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
@@ -52,18 +48,18 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   document.body.appendChild(renderer.domElement);
 
   // Particle geometry and material using a shader
-  const particles = 90000;
+  const particles = 10000;
   const geometry = new THREE.BufferGeometry();
   const positions = new Float32Array(particles * 3);
-  const velocities = new Float32Array(particles * 3);
+  const velocities = new Float32Array(particles * 2);
   const colors = new Float32Array(particles * 3);
   const sizes = new Float32Array(particles);
   for (let i = 0; i < particles * 3; i++) {
     positions[i] = (Math.random() * 2 - 1) * 5;
     velocities[i] = (Math.random() * 2 - 1) * 0.2;
     colors[i * 3 + 0] = (Math.random() * 2 - 1) * 5; // Red
-    colors[i * 3 + 1] = (Math.random() * 2 - 1) * 5; // Green
-    colors[i * 3 + 2] = (Math.random() * 2 - 1) * 5; // Blue
+    colors[i * 3 + 1] = (Math.random() * 2 - 1) * 2; // Green
+    colors[i * 3 + 2] = (Math.random() * 2 - 1) * 3; // Blue
     sizes[i] = Math.random() * 5 + 0.5; // Size between 5 and 25
   }
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
@@ -72,12 +68,12 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
   const TWEAKS = {
     pointSize: 1.0,
-    time: 0,
+    time: 0.0,
     attractorX: 0,
     attractorY: 0,
     attractorZ: 0,
-    decay: 0.95,
-    colorFactor: 0.0, // Initial value for colorFactor
+    decay: 1.0,
+    colorFactor: 1.0, // Initial value for colorFactor
     modulationFactor: 1.0, // Initial value
   };
   const material = new THREE.ShaderMaterial({
@@ -106,7 +102,7 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     void main() {
       vec3 acc = attractor - position;
       vec3 vel = velocity + 0.05 * acc; // Attraction strength
-      vel *= decay; // Damping
+      vel /= decay; // Damping
 
       vec3 newPos = position + vel;
       float dynamicColor = sin((time + length(newPos) * colorFactor) * modulationFactor); // Adjust sin calculation
@@ -139,8 +135,6 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     blending: THREE.AdditiveBlending,
     depthTest: false,
     transparent: true,
-    // blendEquation: THREE.AddEquation,
-
     // blendColor: THREE.OneMinusConstantColorFactor,
   });
 
@@ -210,20 +204,20 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   });
 
   gui
-    .add(TWEAKS, "decay", -10.0, 200.0)
+    .add(TWEAKS, "decay", -1.0, 200.0)
     .step(0.01)
     .onChange((value) => {
       material.uniforms.decay.value = value;
     });
   // GUI control for colorFactor
   gui
-    .add(TWEAKS, "colorFactor", -10.0, 200.0)
+    .add(TWEAKS, "colorFactor", -1.0, 20.0)
     .step(0.1)
     .onChange((value) => {
       material.uniforms.colorFactor.value = value;
     });
   gui
-    .add(TWEAKS, "modulationFactor", -10.0, 200.0)
+    .add(TWEAKS, "modulationFactor", -1.0, 20.0)
     .step(0.1)
     .onChange((value) => {
       material.uniforms.modulationFactor.value = value;
@@ -263,18 +257,15 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   wrap.render = ({ playhead }) => {
     const anim = playhead * Math.PI * 0.05;
     const anim2 = Math.sin(Math.sqrt(9 ^ (2 - playhead) ^ 2)) * playhead;
-    material.uniforms.time.value += anim + anim2;
-    // particleSystem.rotation.y += 0.005;
+    // material.uniforms.time.value += anim2 * 0.05;
+    // material.uniforms.time.value += 0.01;
     material.uniforms.decay.value = TWEAKS.decay;
     material.uniforms.colorFactor.value = TWEAKS.colorFactor;
-    // onMouseMove();
-    // particleSystem.rotation.x += anim;
-    // particleSystem.rotation.z += 0.005;
-    // onMouseMove();
 
     controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = trueDSA
     renderer.render(scene, camera);
     geometry.attributes.position.needsUpdate = true;
+    geometry.attributes.velocity.needsUpdate = true;
   };
 
   wrap.resize = ({ width, height }) => {
