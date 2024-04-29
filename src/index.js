@@ -1,7 +1,8 @@
-import { ssam } from "ssam";
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import * as dat from "dat.gui";
+import { ssam } from "ssam";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { getRandomSpherePoint } from "./utils";
 
 const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   const scene = new THREE.Scene();
@@ -17,21 +18,9 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
+
   // Create a GUI instance
   const gui = new dat.GUI();
-
-  // function createFBO() {
-  //   // width and height of FBO
-  //   const width = 512;
-  //   const height = 512;
-  //   const fbo = new THREE.WebGLRenderTarget(width, height, {
-  //     minFilter: THREE.LinearFilter,
-  //     magFilter: THREE.LinearFilter,
-  //     wrapS: THREE.RepeatWrapping,
-  //     wrapT: THREE.RepeatWrapping,
-  //   });
-  //   return fbo;
-  // }
 
   renderer.setPixelRatio(pixelRatio);
   renderer.setClearColor(0x000000, 1);
@@ -46,6 +35,7 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   const velocities = new Float32Array(particles * 2);
   const colors = new Float32Array(particles * 3);
   const sizes = new Float32Array(particles);
+
   for (let i = 0; i < particles * 3; i++) {
     positions[i] = (Math.random() * 2 - 1) * 5;
     velocities[i] = (Math.random() * 2 - 1) * 0.2;
@@ -58,14 +48,15 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   geometry.setAttribute("velocity", new THREE.BufferAttribute(velocities, 3));
   geometry.setAttribute("acolor", new THREE.BufferAttribute(colors, 3));
   geometry.setAttribute("size", new THREE.BufferAttribute(sizes, 1));
+
   const TWEAKS = {
-    pointSize: 1.0,
+    pointSize: 6.0,
     time: 0.0,
     attractorX: 0,
     attractorY: 0,
     attractorZ: 0,
-    decay: 1.0,
-    colorFactor: 1.0, // Initial value for colorFactor
+    decay: -0.3,
+    colorFactor: 17.0, // Initial value for colorFactor
     modulationFactor: 1.0, // Initial value
   };
   const material = new THREE.ShaderMaterial({
@@ -249,12 +240,13 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   wrap.render = ({ playhead }) => {
     const anim = playhead * Math.PI * 0.05;
     const anim2 = Math.sin(Math.sqrt(9 ^ (2 - playhead) ^ 2)) * playhead;
-    // material.uniforms.time.value += anim2 * 0.05;
-    // material.uniforms.time.value += 0.01;
+    material.uniforms.time.value += playhead * 0.02;
     material.uniforms.decay.value = TWEAKS.decay;
     material.uniforms.colorFactor.value = TWEAKS.colorFactor;
     geometry.attributes.position.needsUpdate = true;
     geometry.attributes.velocity.needsUpdate = true;
+    geometry.attributes.acolor.needsUpdate = true;
+    geometry.attributes.size.needsUpdate = true;
 
     controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = trueDSA
     renderer.render(scene, camera);
