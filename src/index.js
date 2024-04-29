@@ -6,23 +6,15 @@ import * as dat from "dat.gui";
 const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.z = 5;
+  camera.position.set(0, 0, 5);
 
   const renderer = new THREE.WebGLRenderer({
     canvas,
     antialias: true,
-    precision: "highp",
     powerPreference: "high-performance",
     preserveDrawingBuffer: true,
   });
-  camera.position.set(0, 0, 5);
 
-  function hexToRgb(hex) {
-    let r = parseInt(hex.slice(0, 2), 16);
-    let g = parseInt(hex.slice(2, 4), 16);
-    let b = parseInt(hex.slice(4, 6), 16);
-    return { r, g, b };
-  }
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   // Create a GUI instance
@@ -57,10 +49,10 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   for (let i = 0; i < particles * 3; i++) {
     positions[i] = (Math.random() * 2 - 1) * 5;
     velocities[i] = (Math.random() * 2 - 1) * 0.2;
-    colors[i * 3 + 0] = (Math.random() * 2 - 1) * 5; // Red
-    colors[i * 3 + 1] = (Math.random() * 2 - 1) * 2; // Green
-    colors[i * 3 + 2] = (Math.random() * 2 - 1) * 3; // Blue
-    sizes[i] = Math.random() * 5 + 0.5; // Size between 5 and 25
+    colors[i * 3 + 0] = (Math.random() * 4 - 1) * 1; // Red
+    colors[i * 3 + 1] = (Math.random() * 4 - 1) * 1; // Green
+    colors[i * 3 + 2] = (Math.random() * 4 - 1) * 1; // Blue
+    sizes[i] = Math.random() * 10 + 2; // Size between 5 and 25
   }
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("velocity", new THREE.BufferAttribute(velocities, 3));
@@ -261,11 +253,11 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
     // material.uniforms.time.value += 0.01;
     material.uniforms.decay.value = TWEAKS.decay;
     material.uniforms.colorFactor.value = TWEAKS.colorFactor;
+    geometry.attributes.position.needsUpdate = true;
+    geometry.attributes.velocity.needsUpdate = true;
 
     controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = trueDSA
     renderer.render(scene, camera);
-    geometry.attributes.position.needsUpdate = true;
-    geometry.attributes.velocity.needsUpdate = true;
   };
 
   wrap.resize = ({ width, height }) => {
