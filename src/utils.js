@@ -30,3 +30,36 @@ export function getRandomSpherePoint() {
 
   return vector;
 }
+
+export function getImage(img, width, height, elevation) {
+  var ctx = getContext(null, width, height);
+  ctx.drawImage(img, 0, 0);
+
+  var imgData = ctx.getImageData(0, 0, width, height);
+  var iData = imgData.data;
+
+  var l = width * height;
+  var data = new Float32Array(l * 3);
+  for (var i = 0; i < l; i++) {
+    var i3 = i * 3;
+    var i4 = i * 4;
+    data[i3] = ((i % width) / width - 0.5) * width;
+    data[i3 + 1] =
+      ((iData[i4] / 0xff) * 0.299 + (iData[i4 + 1] / 0xff) * 0.587 + (iData[i4 + 2] / 0xff) * 0.114) * elevation;
+    data[i3 + 2] = (i / width / height - 0.5) * height;
+  }
+  return data;
+}
+
+//returns an array of random 3D coordinates
+export function getRandomData(width, height, size) {
+  var len = width * height * 3;
+  var data = new Float32Array(len);
+  while (len--) data[len] = (Math.random() * 2 - 1) * size;
+  return data;
+}
+
+//then you convert it to a Data texture:
+// var data = getRandomData( width, height, 256 );
+// var positions = new THREE.DataTexture( data, width, height, THREE.RGBFormat, THREE.FloatType );
+// positions.needsUpdate = true;

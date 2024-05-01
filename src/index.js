@@ -6,8 +6,8 @@ import { getRandomSpherePoint } from "./utils";
 
 const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.set(0, 0, 5);
+  const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 0, 10);
 
   const renderer = new THREE.WebGLRenderer({
     canvas,
@@ -28,11 +28,50 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
   renderer.setSize(width, height);
   document.body.appendChild(renderer.domElement);
 
+  // Fur Shader
+  const furrgeometry = new THREE.SphereGeometry(1, 32, 32);
+
+  const furMaterial = new THREE.ShaderMaterial({
+    vertexShader: `
+        uniform float time;
+        varying vec3 vNormal;
+        varying vec3 vColor;
+
+        void main() {
+            vNormal = normal;
+            float displacement = sin(position.x * 3.0 + time * 2.0) * 0.1;
+
+            vec3 newPosition = position + normal * displacement;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
+          }
+    `,
+    fragmentShader: `
+        varying vec3 vNormal;
+        void main() {
+          vec3 lightDirection = normalize(vec3(1, 1, 1));
+          float lightIntensity = max(dot(vNormal, lightDirection), 0.0);
+          vec3 viewDirection = normalize(cameraPosition - gl_FragCoord.xyz);
+          float specularity = pow(max(dot(reflect(-lightDirection, vNormal), viewDirection), 0.0), 32.0);
+
+            float intensity = dot(vNormal, vec3(0.0, 0.0, 1.0));
+            gl_FragColor = vec4(vec3(1.0, 1.0, 1.0) * intensity, 1.0);
+        }
+    `,
+    uniforms: {
+      time: { value: 0.0 },
+    },
+    // blending: THREE.AdditiveBlending,
+    // blendSrc: THREE.OneFactor,
+    // blendDst: THREE.OneMinusSrcAlphaFactor,
+  });
+  const furrsphere = new THREE.Mesh(furrgeometry, furMaterial);
+  scene.add(furrsphere);
+
   // Particle geometry and material using a shader
   const particles = 10000;
   const geometry = new THREE.BufferGeometry();
   const positions = new Float32Array(particles * 3);
-  const velocities = new Float32Array(particles * 2);
+  const velocities = new Float32Array(particles * 3);
   const colors = new Float32Array(particles * 3);
   const sizes = new Float32Array(particles);
 
@@ -115,10 +154,11 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
         // gl_FragColor = vec4(vColor * intensity, 1.0);
       }
 `,
-    blending: THREE.AdditiveBlending,
+    blending: THREE.SubtractiveBlending,
+    blendEquation: THREE.MaxEquation,
+    // blendingequation: THREE.ReverseSubtractEquation,
     depthTest: false,
     transparent: true,
-    // blendColor: THREE.OneMinusConstantColorFactor,
   });
 
   const particleSystem = new THREE.Points(geometry, material);
@@ -159,12 +199,10 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
           gl_FragColor = vec4(color.rgb * decay,1.0);  // Apply decay to fade the trail
         }
     `,
-    blending: THREE.CustomBlending,
-    blendEquation: THREE.AddEquation,
-    blendSrc: THREE.OneFactor,
-    blendDst: THREE.OneMinusSrcAlphaFactor,
+    blending: THREE.SubtractiveBlending,
+    // blendEquation: THREE.AddEquation,
     depthTest: false,
-    transparent: true,
+    // transparent: true,
   });
 
   // const trailMesh = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), trailMaterial);
@@ -212,41 +250,17 @@ const sketch = ({ wrap, canvas, width, height, pixelRatio }) => {
       material.uniforms.time.value = value;
     });
 
-  function onMouseMove() {
-    document.addEventListener("mousemove", function (event) {
-      const x = (event.clientX / window.innerWidth) * 2 - 1;
-      const y = -(event.clientY / window.innerHeight) * 2 + 1;
-      const vector = new THREE.Vector3(x, y, 0);
-      vector.unproject(camera);
-      const dir = vector.sub(camera.position).normalize();
-      const distance = -camera.position.z / dir.z;
-      const pos = camera.position.clone().add(dir.multiplyScalar(distance));
-      material.uniforms.attractor.value = pos;
-    });
-  }
-
-  function onMouseMove2() {
-    document.addEventListener("mousemove", (event) => {
-      const mouseX = (event.clientX / window.innerWidth) * 2 - 1;
-      const mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
-
-      const velocities = geometry.attributes.velocity.array;
-      for (let i = 0; i < particles; i++) {
-        velocities[i * 3] += mouseX * 0.5;
-        velocities[i * 3 + 1] += mouseY * 2.05;
-      }
-    });
-  }
   wrap.render = ({ playhead }) => {
     const anim = playhead * Math.PI * 0.05;
     const anim2 = Math.sin(Math.sqrt(9 ^ (2 - playhead) ^ 2)) * playhead;
-    material.uniforms.time.value += playhead * 0.02;
+    material.uniforms.time.value += playhead;
     material.uniforms.decay.value = TWEAKS.decay;
     material.uniforms.colorFactor.value = TWEAKS.colorFactor;
     geometry.attributes.position.needsUpdate = true;
     geometry.attributes.velocity.needsUpdate = true;
     geometry.attributes.acolor.needsUpdate = true;
     geometry.attributes.size.needsUpdate = true;
+    furMaterial.uniforms.time.value += anim;
 
     controls.update(); // only required if controls.enableDamping = true, or if controls.autoRotate = trueDSA
     renderer.render(scene, camera);

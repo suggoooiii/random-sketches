@@ -22,6 +22,7 @@
     "dat.gui": "^0.7.9",
     "eases": "^1.0.8",
     "gl-noise": "^1.6.1",
+    "shader-park-core": "^0.2.6",
     "simplex-noise": "^4.0.1",
     "ssam": "^0.18.2",
     "three": "^0.161.0",
